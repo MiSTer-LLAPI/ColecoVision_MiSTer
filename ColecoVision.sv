@@ -18,6 +18,8 @@
 //  with this program; if not, write to the Free Software Foundation, Inc.,
 //  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //============================================================================
+//LLAPI NOTE: 
+// llapi.sv needs to be in rtl folder and needs to be declared in file.qip (set_global_assignment -name SYSTEMVERILOG_FILE rtl/llapi.sv)
 
 module emu
 (
@@ -175,7 +177,11 @@ module emu
 );
 
 assign ADC_BUS = 'Z;
-assign USER_OUT = '1;
+
+//LLAPI
+//assign USER_OUT = '1;
+//LLAPI
+
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = 0;
@@ -183,7 +189,9 @@ assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DD
 assign LED_USER   = ioctl_download;
 assign LED_DISK   = 0;
 assign LED_POWER  = 0;
-assign BUTTONS    = 0;
+//LLAPI: OSD combinaison
+assign BUTTONS   = llapi_osd;
+//LLAPI
 assign VGA_SCALER = 0;
 assign VGA_DISABLE= 0;
 assign HDMI_FREEZE= 0;
@@ -211,6 +219,18 @@ parameter CONF_STR = {
 	"F,COLBINROM;",
 	"F,SG,Load SG-1000;",
 	"-;",
+	//LLAPI: OSD menu item
+	//LLAPI Always ON
+	"-,<< LLAPI enabled >>;",
+	"-,<< Use USER I/O port >>;",
+	"-,<< Supported controllers >>;",
+	"-,  - Coleco + SAC;",
+	"-,  - Atari Jaguar;",
+	"-,  - SNES NTT Data;",
+	"-,  - Atari 5200;",
+	"-,  - Sega SG-1000;",
+	"-;",
+	//END LLAPI	
 	"O12,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O79,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"-;",
@@ -253,7 +273,12 @@ end
 wire [31:0] status;
 wire  [1:0] buttons;
 
-wire [31:0] joy0, joy1;
+//LLAPI: Distinguish hps_io (usb) josticks from llapi joysticks
+wire [31:0] joy_usb_0, joy_usb_1;
+//LLAPI
+
+wire [31:0] joy0 = joy_ll_a;
+wire [31:0] joy1 = joy_ll_b;
 
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
@@ -278,10 +303,263 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ioctl_wr(ioctl_wr),
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_dout),
-
-	.joystick_0(joy0),
-	.joystick_1(joy1)
+	//LLAPI
+	.joystick_0(joy0_usb_0),
+	.joystick_1(joy1_usb_1)
+	//LLAPI
 );
+
+//////////////////   LLAPI   ///////////////////
+
+wire [31:0] llapi_buttons, llapi_buttons2;
+wire [71:0] llapi_analog, llapi_analog2;
+wire [7:0]  llapi_type, llapi_type2;
+wire llapi_en, llapi_en2;
+
+wire llapi_select = 1'b1;
+
+wire llapi_latch_o, llapi_latch_o2, llapi_data_o, llapi_data_o2;
+
+// LLAPI Indexes:
+// 0 = D+    = P1 Latch
+// 1 = D-    = P1 Data
+// 2 = TX-   = LLAPI Enable
+// 3 = GND_d = N/C
+// 4 = RX+   = P2 Latch
+// 5 = RX-   = P2 Data
+
+
+always_comb begin
+	USER_OUT= 6'b111111;
+	if (llapi_select) begin
+		USER_OUT[0] = llapi_latch_o;
+		USER_OUT[1] = llapi_data_o;
+		USER_OUT[2] = ~(llapi_select & ~OSD_STATUS); // LED for Blister
+		USER_OUT[4] = llapi_latch_o2;
+		USER_OUT[5] = llapi_data_o2;
+	end
+end
+
+
+//Port 1 conf
+LLAPI llapi
+(
+	.CLK_50M(CLK_50M),
+	.LLAPI_SYNC(vblank),
+	.IO_LATCH_IN(USER_IN[0]),
+	.IO_LATCH_OUT(llapi_latch_o),
+	.IO_DATA_IN(USER_IN[1]),
+	.IO_DATA_OUT(llapi_data_o),
+	.ENABLE(llapi_select & ~OSD_STATUS),
+	.LLAPI_BUTTONS(llapi_buttons),
+	.LLAPI_ANALOG(llapi_analog),
+	.LLAPI_TYPE(llapi_type),
+	.LLAPI_EN(llapi_en)
+);
+
+//Port 2 conf
+LLAPI llapi2
+(
+	.CLK_50M(CLK_50M),
+	.LLAPI_SYNC(vblank),
+	.IO_LATCH_IN(USER_IN[4]),
+	.IO_LATCH_OUT(llapi_latch_o2),
+	.IO_DATA_IN(USER_IN[5]),
+	.IO_DATA_OUT(llapi_data_o2),
+	.ENABLE(llapi_select & ~OSD_STATUS),
+	.LLAPI_BUTTONS(llapi_buttons2),
+	.LLAPI_ANALOG(llapi_analog2),
+	.LLAPI_TYPE(llapi_type2),
+	.LLAPI_EN(llapi_en2)
+);
+
+reg llapi_button_pressed, llapi_button_pressed2;
+
+always @(posedge CLK_50M) begin
+        if (reset) begin
+                llapi_button_pressed  <= 0;
+                llapi_button_pressed2 <= 0;
+	end else begin
+	       	if (|llapi_buttons)
+                	llapi_button_pressed  <= 1;
+        	if (|llapi_buttons2)
+                	llapi_button_pressed2 <= 1;
+	end
+end
+
+// controller id is 0 if there is either an Atari controller or no controller
+// if id is 0, assume there is no controller until a button is pressed
+// also check for 255 and treat that as 'no controller' as well
+wire use_llapi  = llapi_en  && llapi_select && ((|llapi_type  && ~(&llapi_type))  || llapi_button_pressed);
+wire use_llapi2 = llapi_en2 && llapi_select && ((|llapi_type2 && ~(&llapi_type2)) || llapi_button_pressed2);
+
+// Indexes:
+// 0 = D+    = P1 Latch
+// 1 = D-    = P1 Data
+// 2 = TX-   = LLAPI Enable
+// 3 = GND_d = N/C
+// 4 = RX+   = P2 Latch
+// 5 = RX-   = P2 Data
+
+//Controller string provided by core for reference (order is important)
+//Controller specific mapping based on type. More info here : https://docs.google.com/document/d/12XpxrmKYx_jgfEPyw-O2zex1kTQZZ-NSBdLO2RQPRzM/edit
+//llapi_Buttons id are HID id - 1
+
+// "J1,Fire 1,Fire 2,*,#,0,1,2,3,4,5,6,7,8,9,Purple Tr,Blue Tr;",
+
+//Port 1 mapping
+
+wire [31:0] joy_ll_a;
+wire a_left, a_right, a_down, a_up;
+
+always_comb begin
+	// button layout for Coleco controller (spinner not supported)
+	if (llapi_type == 1 || llapi_type == 34) begin
+		joy_ll_a = {
+			12'b0, llapi_buttons[3], llapi_buttons[2], // Blue Tr, Purple Tr
+			llapi_buttons[16],llapi_buttons[15], llapi_buttons[14], llapi_buttons[13],llapi_buttons[12], // 9, 8, 7, 6, 5
+			llapi_buttons[11], llapi_buttons[10],llapi_buttons[9], llapi_buttons[8], llapi_buttons[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons[19], llapi_buttons[17], // #, *
+			llapi_buttons[1], llapi_buttons[0], // Fire 2, Fire 1
+			llapi_buttons[27], llapi_buttons[26], llapi_buttons[25], llapi_buttons[24] // d-pad
+		};
+	// button layout for Jaguar controller
+	end else if (llapi_type == 11) begin
+		joy_ll_a = {
+			12'b0, llapi_buttons[4], llapi_buttons[5], // Blue Tr, Purple Tr
+			llapi_buttons[16],llapi_buttons[15], llapi_buttons[14], llapi_buttons[13],llapi_buttons[12], // 9, 8, 7, 6, 5
+			llapi_buttons[11], llapi_buttons[10],llapi_buttons[9], llapi_buttons[8], llapi_buttons[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons[19], llapi_buttons[17], // #, *
+			llapi_buttons[7], llapi_buttons[0], // Fire 2, Fire 1
+			llapi_buttons[27], llapi_buttons[26], llapi_buttons[25], llapi_buttons[24] // d-pad
+		};
+	// button layout for NTT SNES controller
+	end else if (llapi_type == 47 || llapi_type == 27) begin
+		joy_ll_a = {
+			12'b0, llapi_buttons[3], llapi_buttons[2], // Blue Tr, Purple Tr
+			llapi_buttons[16],llapi_buttons[15], llapi_buttons[14], llapi_buttons[13],llapi_buttons[12], // 9, 8, 7, 6, 5
+			llapi_buttons[11], llapi_buttons[10],llapi_buttons[9], llapi_buttons[8], llapi_buttons[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons[19], llapi_buttons[17], // #, *
+			llapi_buttons[1], llapi_buttons[0], // Fire 2, Fire 1
+			llapi_buttons[27], llapi_buttons[26], llapi_buttons[25], llapi_buttons[24] // d-pad
+		};
+	// button layout for Atari 5200 controller
+	end else if (llapi_type == 6) begin
+		joy_ll_a = {
+			14'b0, // Blue Tr, Purple Tr
+			llapi_buttons[16],llapi_buttons[15], llapi_buttons[14], llapi_buttons[13],llapi_buttons[12], // 9, 8, 7, 6, 5
+			llapi_buttons[11], llapi_buttons[10],llapi_buttons[9], llapi_buttons[8], llapi_buttons[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons[19], llapi_buttons[17], // #, *
+			llapi_buttons[1], llapi_buttons[0], // Fire 2, Fire 1
+			a_up, a_down, a_left, a_right // d-pad
+		};
+	end else begin
+		joy_ll_a = {
+			26'b0,
+			llapi_buttons[1], llapi_buttons[0], // Fire 2, Fire 1
+			llapi_buttons[27], llapi_buttons[26], llapi_buttons[25], llapi_buttons[24] // d-pad
+		};
+	end
+end
+
+wire [7:0] joy_ll_ax = llapi_analog[7:0]; //Left stick X;
+wire [7:0] joy_ll_ay = llapi_analog[15:8]; //Left stick Y;
+
+always_comb begin
+	if (llapi_type == 6) begin
+	//If directions dont work, we can lower the bounderies. 100 and 20 might be a good alternative. To be tested based on feedback from community
+		a_right = (joy_ll_ax > 200) ? 1 : 0;
+		a_left = (joy_ll_ax < 50) ? 1 : 0;
+		a_down = (joy_ll_ay > 200) ? 1 : 0; 
+		a_up = (joy_ll_ay < 50) ? 1 : 0;				
+	end else begin
+		a_right = 0;
+		a_left = 0;
+		a_down = 0;
+		a_up = 0;
+	end
+end
+
+//Port 2 mapping
+
+//TODO : Add Atari5800 stick support to Port 2
+
+wire [31:0] joy_ll_b;
+wire b_left, b_right, b_down, b_up;
+
+always_comb begin
+		// button layout for Coleco controller (spinner not supported)
+	if (llapi_type2 == 1 || llapi_type2 == 34) begin
+		joy_ll_b = {
+			12'b0, llapi_buttons2[3], llapi_buttons2[2], // Blue Tr, Purple Tr
+			llapi_buttons2[16],llapi_buttons2[15], llapi_buttons2[14], llapi_buttons2[13],llapi_buttons2[12], // 9, 8, 7, 6, 5
+			llapi_buttons2[11], llapi_buttons2[10],llapi_buttons2[9], llapi_buttons2[8], llapi_buttons2[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons2[19], llapi_buttons2[17], // #, *
+			llapi_buttons2[1], llapi_buttons2[0], // Fire 2, Fire 1
+			llapi_buttons2[27], llapi_buttons2[26], llapi_buttons2[25], llapi_buttons2[24] // d-pad
+		};
+	// button layout for Jaguar controller
+	end else if (llapi_type2 == 11) begin
+		joy_ll_b = {
+			12'b0, llapi_buttons2[4], llapi_buttons2[5], // Blue Tr, Purple Tr
+			llapi_buttons2[16],llapi_buttons2[15], llapi_buttons2[14], llapi_buttons2[13],llapi_buttons2[12], // 9, 8, 7, 6, 5
+			llapi_buttons2[11], llapi_buttons2[10],llapi_buttons2[9], llapi_buttons2[8], llapi_buttons2[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons2[19], llapi_buttons2[17], // #, *
+			llapi_buttons2[7], llapi_buttons2[0], // Fire 2, Fire 1
+			llapi_buttons2[27], llapi_buttons2[26], llapi_buttons2[25], llapi_buttons2[24] // d-pad
+		};
+	// button layout for NTT SNES controller
+	end else if (llapi_type2 == 47 || llapi_type2 == 27) begin
+		joy_ll_b = {
+			12'b0, llapi_buttons2[3], llapi_buttons2[2], // Blue Tr, Purple Tr
+			llapi_buttons2[16],llapi_buttons2[15], llapi_buttons2[14], llapi_buttons2[13],llapi_buttons2[12], // 9, 8, 7, 6, 5
+			llapi_buttons2[11], llapi_buttons2[10],llapi_buttons2[9], llapi_buttons2[8], llapi_buttons2[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons2[19], llapi_buttons2[17], // #, *
+			llapi_buttons2[1], llapi_buttons2[0], // Fire 2, Fire 1
+			llapi_buttons2[27], llapi_buttons2[26], llapi_buttons2[25], llapi_buttons2[24] // d-pad
+		};
+	// button layout for Atari 5200 controller
+	end else if (llapi_type2 == 6) begin
+		joy_ll_b = {
+			14'b0, // Blue Tr, Purple Tr
+			llapi_buttons2[16],llapi_buttons2[15], llapi_buttons2[14], llapi_buttons2[13],llapi_buttons2[12], // 9, 8, 7, 6, 5
+			llapi_buttons2[11], llapi_buttons2[10],llapi_buttons2[9], llapi_buttons2[8], llapi_buttons2[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons2[19], llapi_buttons2[17], // #, *
+			llapi_buttons2[1], llapi_buttons2[0], // Fire 2, Fire 1
+			b_up, b_down, b_left, b_right // d-pad
+		};
+	end else begin
+		joy_ll_b = {
+			26'b0,
+			llapi_buttons2[1], llapi_buttons2[0], // Fire 2, Fire 1
+			llapi_buttons2[27], llapi_buttons2[26], llapi_buttons2[25], llapi_buttons2[24] // d-pad
+		};
+	end
+end
+
+wire [7:0] joy_ll_bx = llapi_analog2[7:0]; //Left stick X;
+wire [7:0] joy_ll_by = llapi_analog2[15:8]; //Left stick Y;
+
+always_comb begin
+	if (llapi_type2 == 6) begin
+		//If directions dont work, we can lower the bounderies. 100 and 20 might be a good alternative. To be tested based on feedback from community
+		b_right = (joy_ll_bx > 200) ? 1 : 0;
+		b_left = (joy_ll_bx < 50) ? 1 : 0;
+		b_down = (joy_ll_by > 200) ? 1 : 0; 
+		b_up = (joy_ll_by < 50) ? 1 : 0;				
+	end else begin
+		b_right = 0;
+		b_left = 0;
+		b_down = 0;
+		b_up = 0;
+	end
+end
+
+//Assign (DOWN + START + FIRST BUTTON) Combinaison to bring the OSD up - P1 and P2 ports.
+wire llapi_osd = (llapi_buttons[26] & llapi_buttons[5] & llapi_buttons[0]) || (llapi_buttons2[26] & llapi_buttons2[5] & llapi_buttons2[0]);
+
+//////////////////  END LLAPI   ///////////////////
+
 
 /////////////////  RESET  /////////////////////////
 

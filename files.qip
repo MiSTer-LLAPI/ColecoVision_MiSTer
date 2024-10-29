@@ -21,3 +21,4 @@ set_global_assignment -name VHDL_FILE rtl/cv_clock.vhd
 set_global_assignment -name VHDL_FILE rtl/cv_por.vhd
 set_global_assignment -name VHDL_FILE rtl/cv_console.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ColecoVision.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/llapi.sv
