@@ -224,7 +224,7 @@ parameter CONF_STR = {
 	"-,<< LLAPI enabled >>;",
 	"-,<< Use USER I/O port >>;",
 	"-,<< Supported controllers >>;",
-	"-,  - Coleco + SAC;",
+	"-,  - Coleco + SAC : press RIGHT trigger or PURPLE button (SAC) while connecting the controller;",
 	"-,  - Atari Jaguar;",
 	"-,  - SNES NTT Data;",
 	"-,  - Atari 5200;",
@@ -440,7 +440,7 @@ always_comb begin
 			llapi_buttons[16],llapi_buttons[15], llapi_buttons[14], llapi_buttons[13],llapi_buttons[12], // 9, 8, 7, 6, 5
 			llapi_buttons[11], llapi_buttons[10],llapi_buttons[9], llapi_buttons[8], llapi_buttons[18],  // 4, 3, 2, 1, 0 
 			llapi_buttons[19], llapi_buttons[17], // #, *
-			llapi_buttons[1], llapi_buttons[0], // Fire 2, Fire 1
+			llapi_buttons[1] || llapi_buttons[7] , llapi_buttons[0] || llapi_buttons[6], // Fire 2, Fire 1
 			llapi_buttons[27], llapi_buttons[26], llapi_buttons[25], llapi_buttons[24] // d-pad
 		};
 	// button layout for Atari 5200 controller
@@ -455,8 +455,11 @@ always_comb begin
 		};
 	end else begin
 		joy_ll_a = {
-			26'b0,
-			llapi_buttons[1], llapi_buttons[0], // Fire 2, Fire 1
+			12'b0, llapi_buttons[3], llapi_buttons[2], // Blue Tr, Purple Tr
+			llapi_buttons[16],llapi_buttons[15], llapi_buttons[14], llapi_buttons[13],llapi_buttons[12], // 9, 8, 7, 6, 5
+			llapi_buttons[11], llapi_buttons[10],llapi_buttons[9], llapi_buttons[8], llapi_buttons[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons[19], llapi_buttons[17], // #, *
+			llapi_buttons[1] || llapi_buttons[7] , llapi_buttons[0] || llapi_buttons[6], // Fire 2, Fire 1
 			llapi_buttons[27], llapi_buttons[26], llapi_buttons[25], llapi_buttons[24] // d-pad
 		};
 	end
@@ -515,7 +518,7 @@ always_comb begin
 			llapi_buttons2[16],llapi_buttons2[15], llapi_buttons2[14], llapi_buttons2[13],llapi_buttons2[12], // 9, 8, 7, 6, 5
 			llapi_buttons2[11], llapi_buttons2[10],llapi_buttons2[9], llapi_buttons2[8], llapi_buttons2[18],  // 4, 3, 2, 1, 0 
 			llapi_buttons2[19], llapi_buttons2[17], // #, *
-			llapi_buttons2[1], llapi_buttons2[0], // Fire 2, Fire 1
+			llapi_buttons2[1] || llapi_buttons2[7], llapi_buttons2[0] || llapi_buttons2[6], // Fire 2, Fire 1
 			llapi_buttons2[27], llapi_buttons2[26], llapi_buttons2[25], llapi_buttons2[24] // d-pad
 		};
 	// button layout for Atari 5200 controller
@@ -530,10 +533,13 @@ always_comb begin
 		};
 	end else begin
 		joy_ll_b = {
-			26'b0,
-			llapi_buttons2[1], llapi_buttons2[0], // Fire 2, Fire 1
+			12'b0, llapi_buttons2[3], llapi_buttons2[2], // Blue Tr, Purple Tr
+			llapi_buttons2[16],llapi_buttons2[15], llapi_buttons2[14], llapi_buttons2[13],llapi_buttons2[12], // 9, 8, 7, 6, 5
+			llapi_buttons2[11], llapi_buttons2[10],llapi_buttons2[9], llapi_buttons2[8], llapi_buttons2[18],  // 4, 3, 2, 1, 0 
+			llapi_buttons2[19], llapi_buttons2[17], // #, *
+			llapi_buttons2[1] || llapi_buttons2[7], llapi_buttons2[0] || llapi_buttons2[6], // Fire 2, Fire 1
 			llapi_buttons2[27], llapi_buttons2[26], llapi_buttons2[25], llapi_buttons2[24] // d-pad
-		};
+		};		
 	end
 end
 
