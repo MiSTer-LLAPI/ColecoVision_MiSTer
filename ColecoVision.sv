@@ -223,12 +223,15 @@ parameter CONF_STR = {
 	//LLAPI Always ON
 	"-,<< LLAPI enabled >>;",
 	"-,<< Use USER I/O port >>;",
-	"-,<< Supported controllers >>;",
-	"-,  - Coleco + SAC : press RIGHT trigger or PURPLE button (SAC) while connecting the controller;",
-	"-,  - Atari Jaguar;",
-	"-,  - SNES NTT Data;",
-	"-,  - Atari 5200;",
-	"-,  - Sega SG-1000;",
+	"P1,<< LLAPI notes >>;",
+	"P1-;",
+	"P1-,Supported controllers :;",
+	"P1-,-Coleco/SAC (press RIGHT trg;",
+	"P1-, or PURPLE btn + Reset port);",	
+	"P1-,-Atari Jaguar,;",
+	"P1-,-SNES NTT Data,;",
+	"P1-,-Atari 5200,;",
+	"P1-,-Sega SG-1000,;",
 	"-;",
 	//END LLAPI	
 	"O12,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
@@ -242,6 +245,9 @@ parameter CONF_STR = {
 	"O45,RAM Size,1KB,8KB,SGM;",
 	"R0,Reset;",
 	"J1,Fire 1,Fire 2,*,#,0,1,2,3,4,5,6,7,8,9,Purple Tr,Blue Tr;",
+	"I,",
+	"LLAPI device detected,",
+	"LLAPI device not detetected,",
 	"V,v",`BUILD_DATE
 };
 
@@ -277,6 +283,11 @@ wire  [1:0] buttons;
 wire [31:0] joy_usb_0, joy_usb_1;
 //LLAPI
 
+//LLAPI: Info pop-up
+reg llapi_info_req;
+reg [7:0] llapi_info;
+//LLAPI
+
 wire [31:0] joy0 = joy_ll_a;
 wire [31:0] joy1 = joy_ll_b;
 
@@ -305,7 +316,9 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ioctl_dout(ioctl_dout),
 	//LLAPI
 	.joystick_0(joy0_usb_0),
-	.joystick_1(joy1_usb_1)
+	.joystick_1(joy1_usb_1),
+	.info_req(llapi_info_req),
+	.info(llapi_info),
 	//LLAPI
 );
 
@@ -386,6 +399,35 @@ always @(posedge CLK_50M) begin
                 	llapi_button_pressed2 <= 1;
 	end
 end
+
+/*
+//llapi status toggle detection wip
+
+reg old_llapi_status;
+wire toggle_llapi = ~old_llapi_status && llapi_en;
+
+assign llapi_info_req = llapi_enabled | llapi_disabled;
+
+always_comb begin
+	llapi_info = 8'd0;
+	if (llapi_enabled)
+		info = 8'd1;
+	if (llapi_disabled)
+		info = 8'd2;
+end
+
+reg [31:0] timer;
+
+always @(posedge CLK_50M) begin
+		old_llapi_status <= llapi_en;
+		if (old_llapi_status == ~llapi_en) begin
+			if (status[53] && ~old_resetsw)
+			timer <= 1_000_000;
+			if (|timer)
+				timer <= timer - 1'd1;
+		end
+end*/
+
 
 // controller id is 0 if there is either an Atari controller or no controller
 // if id is 0, assume there is no controller until a button is pressed
