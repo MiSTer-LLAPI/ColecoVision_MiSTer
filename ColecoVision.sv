@@ -215,15 +215,17 @@ video_freak video_freak
 `include "build_id.v" 
 parameter CONF_STR = {
 	"Coleco;;",
+	//LLAPI: OSD menu item
+	//LLAPI Always ON
+	"-,>> LLAPI enabled core    <<;",		
+	"-,>> Connect USER I/O port <<;",
 	"-;",
+	//END LLAPI
 	"F,COLBINROM;",
 	"F,SG,Load SG-1000;",
 	"-;",
-	//LLAPI: OSD menu item
-	//LLAPI Always ON
-	"-,<< LLAPI enabled >>;",
-	"-,<< Use USER I/O port >>;",
-	"P1,<< LLAPI notes >>;",
+	//LLAPI notes
+	"P1,LLAPI notes;",
 	"P1-;",
 	"P1-,Supported controllers :;",
 	"P1-,-Coleco/SAC (press RIGHT trg;",
@@ -329,8 +331,6 @@ wire [71:0] llapi_analog, llapi_analog2;
 wire [7:0]  llapi_type, llapi_type2;
 wire llapi_en, llapi_en2;
 
-wire llapi_select = 1'b1;
-
 wire llapi_latch_o, llapi_latch_o2, llapi_data_o, llapi_data_o2;
 
 // LLAPI Indexes:
@@ -343,14 +343,11 @@ wire llapi_latch_o, llapi_latch_o2, llapi_data_o, llapi_data_o2;
 
 
 always_comb begin
-	USER_OUT= 6'b111111;
-	if (llapi_select) begin
 		USER_OUT[0] = llapi_latch_o;
 		USER_OUT[1] = llapi_data_o;
-		USER_OUT[2] = ~(llapi_select & ~OSD_STATUS); // LED for Blister
+		USER_OUT[2] = OSD_STATUS; // LED for Blister
 		USER_OUT[4] = llapi_latch_o2;
 		USER_OUT[5] = llapi_data_o2;
-	end
 end
 
 
@@ -363,7 +360,7 @@ LLAPI llapi
 	.IO_LATCH_OUT(llapi_latch_o),
 	.IO_DATA_IN(USER_IN[1]),
 	.IO_DATA_OUT(llapi_data_o),
-	.ENABLE(llapi_select & ~OSD_STATUS),
+	.ENABLE(~OSD_STATUS),
 	.LLAPI_BUTTONS(llapi_buttons),
 	.LLAPI_ANALOG(llapi_analog),
 	.LLAPI_TYPE(llapi_type),
@@ -379,7 +376,7 @@ LLAPI llapi2
 	.IO_LATCH_OUT(llapi_latch_o2),
 	.IO_DATA_IN(USER_IN[5]),
 	.IO_DATA_OUT(llapi_data_o2),
-	.ENABLE(llapi_select & ~OSD_STATUS),
+	.ENABLE(~OSD_STATUS),
 	.LLAPI_BUTTONS(llapi_buttons2),
 	.LLAPI_ANALOG(llapi_analog2),
 	.LLAPI_TYPE(llapi_type2),
@@ -401,7 +398,13 @@ always @(posedge CLK_50M) begin
 end
 
 /*
-//llapi status toggle detection wip
+//llapi status detection wip
+//LLAPI Port 1 Atari mode
+//LLAPI Port 1 Searching
+//LLAPI Port 1 Detected
+//LLAPI Port 2 Atari mode
+//LLAPI Port 2 Searching
+//LLAPI Port 2 Detected
 
 reg old_llapi_status;
 wire toggle_llapi = ~old_llapi_status && llapi_en;
@@ -432,16 +435,9 @@ end*/
 // controller id is 0 if there is either an Atari controller or no controller
 // if id is 0, assume there is no controller until a button is pressed
 // also check for 255 and treat that as 'no controller' as well
-wire use_llapi  = llapi_en  && llapi_select && ((|llapi_type  && ~(&llapi_type))  || llapi_button_pressed);
-wire use_llapi2 = llapi_en2 && llapi_select && ((|llapi_type2 && ~(&llapi_type2)) || llapi_button_pressed2);
+wire use_llapi  = llapi_en  && ((|llapi_type  && ~(&llapi_type))  || llapi_button_pressed);
+wire use_llapi2 = llapi_en2 && ((|llapi_type2 && ~(&llapi_type2)) || llapi_button_pressed2);
 
-// Indexes:
-// 0 = D+    = P1 Latch
-// 1 = D-    = P1 Data
-// 2 = TX-   = LLAPI Enable
-// 3 = GND_d = N/C
-// 4 = RX+   = P2 Latch
-// 5 = RX-   = P2 Data
 
 //Controller string provided by core for reference (order is important)
 //Controller specific mapping based on type. More info here : https://docs.google.com/document/d/12XpxrmKYx_jgfEPyw-O2zex1kTQZZ-NSBdLO2RQPRzM/edit
@@ -527,8 +523,6 @@ end
 
 //Port 2 mapping
 
-//TODO : Add Atari5800 stick support to Port 2
-
 wire [31:0] joy_ll_b;
 wire b_left, b_right, b_down, b_up;
 
@@ -606,7 +600,6 @@ end
 //Assign (DOWN + START + FIRST BUTTON) Combinaison to bring the OSD up - P1 and P2 ports.
 wire llapi_osd = (llapi_buttons[26] & llapi_buttons[5] & llapi_buttons[0]) || (llapi_buttons2[26] & llapi_buttons2[5] & llapi_buttons2[0]);
 
-//////////////////  END LLAPI   ///////////////////
 
 
 /////////////////  RESET  /////////////////////////
